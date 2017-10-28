@@ -1,23 +1,10 @@
 require('dotenv').config();
 
-const express = require('express');
-const bodyParser = require('body-parser');
 const onboard = require('./onboard');
 const bad_words = require('badwords-list').regex;
-const qs = require('querystring');
-const axios = require('axios');
 const slack = require('./tinyspeck');
 
 const postResult = result => console.log(result.data);
-
-const app = express();
-
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-
-app.get('/', (req, res) => {
-  res.send('HLC Slack Mod Running');
-});
 
 slack.listen(process.env.PORT,process.env.SLACK_VERIFICATION_TOKEN);
 
@@ -87,6 +74,7 @@ slack.on('team_join', message =>{
 })
 
 slack.on('channel_created', message => {
+  event = message.event;
   var notify_message = {
     token:process.env.SLACK_TOKEN,
     channel:'#admin-alerts',
@@ -108,6 +96,7 @@ slack.on('channel_created', message => {
 })
 
 slack.on('channel_deleted', message => {
+  event = message.event;
   var notify_message = {
     token:process.env.SLACK_TOKEN,
     channel:'#admin-alerts',
@@ -203,11 +192,17 @@ slack.on('user_change',message => {
 slack.on('interactive_message', message => {
   if(message.callback_id == 'alert-acknowledge'){
     console.log(message);
+    let og_message = message.original_message.attachments[0]
     var notify_message = {
       token:process.env.SLACK_TOKEN,
       channel:message.channel.id,
       ts:message.message_ts,
-      text:'Acknowledged by <@' + message.user.id + '>'
+      text:'' ,
+      attachments:[{
+        title:og_message.title,
+        text:og_message.text + '\nAcknowledged by <@'+ message.user.id + '>',
+        color: '#74c8ed'
+      }]
     }
     slack.send(notify_message).then(data => console.log(data));
   }
@@ -222,32 +217,4 @@ slack.on('/send-as-mod', message => {
   slack.send(notify_message).then(data => console.log(data));
 })
 
-
-setInterval(function(){
-  var msg = {
-    token:process.env.SLACK_OAUTH_TOKEN
-  };
-  //axios.post('https://slack.com/api/team.integrationLogs', qs.stringify(msg)).then(postResult);
-},1000);
-
-
-/*
-app.post('/interactive-message', (req, res) => {
-  console.log(req.body);
-  const json = JSON.parse(req.body.payload);
-  if(json.callback_id == 'terms-of-service'){
-  const { token, user, team } = JSON.parse(req.body.payload);
-  if (token === process.env.SLACK_VERIFICATION_TOKEN) {
-    onboard.accept(user.id, team.id);
-    res.send({ text: 'Thank you! The Terms of Service have been accepted.' });
-  } else { res.sendStatus(500); }
-}
-if(json.callback_id == 'alert-acknowledge'){
- res.send('Acknowledged by <@' + json.user.id + '>') 
-}});
-
-app.listen(process.env.PORT, () => {
-  console.log(`App listening on port ${process.env.PORT}!`);
-});
-*/
 
